@@ -1,0 +1,13 @@
+[package]
+name = "zk-bpf"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+clap = "3.0.0-beta.2"
+solana_rbpf = { path = "../solana_rbpf" }
+object = { version = "0.30", features = ["write"] }
+ar = "0.9"
+risc0-zkvm = "0.11"
+risc0-build = { path = "./risc0-build" }
+serde = "1.0"
