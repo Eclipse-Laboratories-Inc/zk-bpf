@@ -13,8 +13,9 @@ risc0_zkvm_guest::entry!(main);
 #[link(name = "bpf", kind = "static")]
 extern "C" {
     fn program_main();
-    static bpf_ro_section_size : *const u32;
-    static bpf_ro_section : *const u32;
+    static bpf_ro_section_size : u32;
+    #[link_name = "bpf_ro_section"]
+    static bpf_ro_section : [u32; 0];
 }
 
 static mut BPF_STACK : [u8; 64 * 4 * 1024] = [0; 64 * 4 * 1024];
@@ -32,31 +33,33 @@ extern "C" fn translate_memory_address(bpf_addr: u64) -> u32 {
      *
      * More details are at https://docs.solana.com/developing/on-chain-programs/overview
      */
-    if 1 << 32 < bpf_addr && bpf_addr < 2 << 32 {
-        if (bpf_addr as u32) < unsafe { *bpf_ro_section_size } {
-            return unsafe { (bpf_ro_section as u32) + (bpf_addr as u32) };
+    if 1 << 32 <= bpf_addr && bpf_addr < 2 << 32 {
+        if (bpf_addr as u32) < unsafe { bpf_ro_section_size } {
+            return unsafe { (bpf_ro_section.as_ptr() as u32) + (bpf_addr as u32) };
         } else {
-            panic!("Attempted to access illegal memory location {:#016x}!", bpf_addr);
+            panic!("Attempted to access illegal memory location {:#018x}!", bpf_addr);
         }
     } else if 2 << 32 <= bpf_addr && bpf_addr < 3 << 32 {
         if (bpf_addr as u32) < (unsafe { BPF_STACK.len() } as u32) {
             return unsafe { BPF_STACK.as_ptr() as u32 } + (bpf_addr as u32);
         } else {
-            panic!("Attempted to access illegal memory location {:#016x}!", bpf_addr);
+            panic!("Attempted to access illegal memory location {:#018x}!", bpf_addr);
         }
     } else if 3 << 32 <= bpf_addr && bpf_addr < 4 << 32 {
         if (bpf_addr as u32) < (unsafe { BPF_HEAP.len() } as u32) {
             return unsafe { BPF_HEAP.as_ptr() as u32 } + (bpf_addr as u32);
         } else {
-            panic!("Attempted to access illegal memory location {:#016x}!", bpf_addr);
+            panic!("Attempted to access illegal memory location {:#018x}!", bpf_addr);
         }
-    } else {
+    } else if 4 << 32 <= bpf_addr {
         // TODO actually implement input data
         if (bpf_addr as u32) < (unsafe { INPUT_DATA.len() } as u32) {
             return unsafe { INPUT_DATA.as_ptr() as u32 } + (bpf_addr as u32);
         } else {
-            panic!("Attempted to access illegal memory location {:#016x}!", bpf_addr);
+            panic!("Attempted to access illegal memory location {:#018x}!", bpf_addr);
         }
+    } else {
+        panic!("Attempted to access illegal memory location {:#018x}!", bpf_addr);
     }
 }
 

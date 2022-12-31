@@ -125,7 +125,7 @@ fn main() {
 
         println!("The final BPF register values were:");
         for i in 0..11 {
-            println!(" {:>3}: {:#016x}", format!("r{}", i), output[i]);
+            println!(" {:>3}: {:#018x}", format!("r{}", i), output[i]);
         }
 
         receipt.verify(method_id).unwrap();
@@ -167,7 +167,7 @@ fn compile_bpf<P: AsRef<Path>, Q: AsRef<Path>>(input_path: P, target_dir: Q, nee
 
     let mut obj = Object::new(BinaryFormat::Elf, Architecture::Riscv32, Endianness::Little);
 
-    let rodata_section = obj.add_section(obj.segment_name(StandardSegment::Data).to_vec(), b".rodata".to_vec(), SectionKind::Text);
+    let rodata_section = obj.add_section(obj.segment_name(StandardSegment::Data).to_vec(), b".rodata".to_vec(), SectionKind::ReadOnlyData);
     let bpf_ro_section_size_symbol = obj.add_symbol(Symbol {
         name: b"bpf_ro_section_size".to_vec(),
         value: 0,
@@ -199,7 +199,7 @@ fn compile_bpf<P: AsRef<Path>, Q: AsRef<Path>>(input_path: P, target_dir: Q, nee
         kind: SymbolKind::Text,
         scope: SymbolScope::Linkage,
         weak: false,
-        section: SymbolSection::Section(rodata_section),
+        section: SymbolSection::Section(text_section),
         flags: SymbolFlags::None,
     });
     obj.add_symbol_data(program_main_symbol, text_section, riscv_bytes, 0x1000); // TODO determine what alignment is necessary
