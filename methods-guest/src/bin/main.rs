@@ -31,26 +31,26 @@ extern "C" fn translate_memory_address(bpf_addr: u64) -> u32 {
         if (bpf_addr as u32) < unsafe { *bpf_ro_section_size } {
             return unsafe { (bpf_ro_section as u32) + (bpf_addr as u32) };
         } else {
-            panic!("Attempted to access illegal memory location {:x}!", bpf_addr);
+            panic!("Attempted to access illegal memory location {:#016x}!", bpf_addr);
         }
     } else if 2 << 32 <= bpf_addr && bpf_addr < 3 << 32 {
         if (bpf_addr as u32) < (unsafe { BPF_STACK.len() } as u32) {
             return unsafe { BPF_STACK.as_ptr() as u32 } + (bpf_addr as u32);
         } else {
-            panic!("Attempted to access illegal memory location {:x}!", bpf_addr);
+            panic!("Attempted to access illegal memory location {:#016x}!", bpf_addr);
         }
     } else if 3 << 32 <= bpf_addr && bpf_addr < 4 << 32 {
         if (bpf_addr as u32) < (unsafe { BPF_HEAP.len() } as u32) {
             return unsafe { BPF_HEAP.as_ptr() as u32 } + (bpf_addr as u32);
         } else {
-            panic!("Attempted to access illegal memory location {:x}!", bpf_addr);
+            panic!("Attempted to access illegal memory location {:#016x}!", bpf_addr);
         }
     } else {
         // TODO actually implement input data
         if (bpf_addr as u32) < (unsafe { INPUT_DATA.len() } as u32) {
             return unsafe { INPUT_DATA.as_ptr() as u32 } + (bpf_addr as u32);
         } else {
-            panic!("Attempted to access illegal memory location {:x}!", bpf_addr);
+            panic!("Attempted to access illegal memory location {:#016x}!", bpf_addr);
         }
     }
 }
@@ -62,4 +62,9 @@ extern "C" fn write_to_journal(output: u64) {
 
 pub fn main() {
     unsafe { program_main() };
+    // commit the values of the 11 BPF registers
+    let ptr = unsafe { BPF_STACK.as_ptr() as *const u64 };
+    for i in 0..11 {
+        env::commit(unsafe { &*ptr.offset(i) });
+    }
 }

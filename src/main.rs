@@ -53,7 +53,10 @@ use risc0_build::{
     guest_methods,
 };
 
-use risc0_zkvm::host::Prover;
+use risc0_zkvm::{
+    host::Prover,
+    serde::from_slice,
+};
 
 const METHODS_DIR : &'static str = env!("METHODS_DIR");
 
@@ -107,11 +110,18 @@ fn main() {
     let method_id = method_id_vec.as_slice();
 
     if !matches.contains_id("no execute") {
-        eprintln!("Executing program");
+        eprintln!("Executing program...");
 
         let prover = Prover::new(&std::fs::read(method_path).unwrap(), method_id).unwrap();
 
         let receipt = prover.run().unwrap();
+
+        let output : [u64; 11] = from_slice(&receipt.get_journal_vec().unwrap()).unwrap();
+
+        println!("The final BPF register values were:");
+        for i in 0..11 {
+            println!(" {:>3}: {:#016x}", format!("r{}", i), output[i]);
+        }
 
         receipt.verify(method_id).unwrap();
     }
