@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 clap = "3.0.0-beta.2"
-solana_rbpf = { path = "../solana_rbpf" }
+solana_rbpf = { git = "https://github.com/Eclipse-Laboratories-Inc/rbpf" }
 object = { version = "0.30", features = ["write"] }
 ar = "0.9"
 risc0-zkvm = "0.11"
