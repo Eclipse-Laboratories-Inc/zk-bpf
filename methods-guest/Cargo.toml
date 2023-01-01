@@ -12,3 +12,4 @@ cc = "1.0"
 [dependencies]
 risc0-zkvm-guest = "0.11"
 risc0-zkvm-platform = "0.11"
+lazy_static = "1.4"
