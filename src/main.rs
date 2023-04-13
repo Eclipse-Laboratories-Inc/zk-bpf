@@ -20,7 +20,7 @@ use object::{
 };
 use solana_rbpf::{
     assembler::assemble,
-    compiler::Compiler,
+    compiler::{Compiler, RiscVRelocation},
     elf::Executable,
     user_error::UserError,
     vm::{Config, SyscallRegistry, TestInstructionMeter},
@@ -155,6 +155,10 @@ fn compile_bpf<P: AsRef<Path>, Q: AsRef<Path>>(
     compiler.compile(&executable).unwrap();
 
     let bpf_elf_bytes = executable.get_ro_section();
+    let pc_offsets_bytes = unsafe { std::slice::from_raw_parts(
+        compiler.pc_offsets.as_ptr() as *const u8,
+        compiler.pc_offsets.len() * std::mem::size_of::<i32>(),
+    ) };
     let riscv_bytes = compiler.result.text_section;
 
     let mut obj = Object::new(BinaryFormat::Elf, Architecture::Riscv32, Endianness::Little);
@@ -191,6 +195,17 @@ fn compile_bpf<P: AsRef<Path>, Q: AsRef<Path>>(
         flags: SymbolFlags::None,
     });
     obj.add_symbol_data(bpf_ro_section_symbol, rodata_section, bpf_elf_bytes, 0x10);
+    let pc_offsets_symbol = obj.add_symbol(Symbol {
+        name: b"pc_offsets".to_vec(),
+        value: 0,
+        size: 0,
+        kind: SymbolKind::Data,
+        scope: SymbolScope::Linkage,
+        weak: false,
+        section: SymbolSection::Section(rodata_section),
+        flags: SymbolFlags::None,
+    });
+    obj.add_symbol_data(pc_offsets_symbol, rodata_section, pc_offsets_bytes, 0x10);
 
     let text_section = obj.add_section(
         obj.segment_name(StandardSegment::Text).to_vec(),
@@ -210,8 +225,13 @@ fn compile_bpf<P: AsRef<Path>, Q: AsRef<Path>>(
     obj.add_symbol_data(program_main_symbol, text_section, riscv_bytes, 0x1000); // TODO determine what alignment is necessary
 
     for reloc in compiler.relocations.iter() {
+        let (symbol_name, offset, relocation_code) = match reloc {
+            RiscVRelocation::Call{offset, symbol} => (symbol, offset, 18), // R_RISCV_CALL
+            RiscVRelocation::Hi20{offset, symbol} => (symbol, offset, 26), // R_RISCV_HI20
+            RiscVRelocation::Lo12I{offset, symbol} => (symbol, offset, 27), // R_RISCV_LO12_I
+        };
         let symbol = obj.add_symbol(Symbol {
-            name: reloc.symbol.as_bytes().to_vec(),
+            name: symbol_name.as_bytes().to_vec(),
             value: 0,
             size: 0,
             kind: SymbolKind::Unknown,
@@ -221,9 +241,9 @@ fn compile_bpf<P: AsRef<Path>, Q: AsRef<Path>>(
             flags: SymbolFlags::None,
         });
         let obj_reloc = Relocation {
-            offset: reloc.offset as u64,
+            offset: *offset as u64,
             size: 0,
-            kind: RelocationKind::Elf(18), // R_RISCV_CALL
+            kind: RelocationKind::Elf(relocation_code),
             encoding: RelocationEncoding::Generic,
             symbol,
             addend: 0,
