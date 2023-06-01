@@ -84,6 +84,36 @@ extern "C" fn write_to_journal(output: u64) {
     env::commit(&output);
 }
 
+#[no_mangle]
+extern "C" fn bpf_div64(dst: u64, src: u64) -> u64 {
+    dst / src
+}
+
+#[no_mangle]
+extern "C" fn bpf_sdiv64(dst: i64, src: i64) -> i64 {
+    dst / src
+}
+
+#[no_mangle]
+extern "C" fn bpf_mod64(dst: u64, src: u64) -> u64 {
+    dst % src
+}
+
+#[no_mangle]
+extern "C" fn bpf_lsh64(dst: u64, src: u64) -> u64 {
+    dst << src
+}
+
+#[no_mangle]
+extern "C" fn bpf_rsh64(dst: u64, src: u64) -> u64 {
+    dst >> src
+}
+
+#[no_mangle]
+extern "C" fn bpf_arsh64(dst: i64, src: u64) -> i64 {
+    dst >> src
+}
+
 pub fn main() {
     unsafe { program_main() };
     // commit the values of the 10 ordinary BPF registers
