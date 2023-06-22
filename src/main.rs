@@ -1,4 +1,4 @@
-// Copyright 2022 Eclipse Labs
+// Copyright 2023 Eclipse Labs
 //
 // Licensed under the Apache License, Version 2.0 <http://www.apache.org/licenses/LICENSE-2.0>.
 // This file may not be copied, modified, or distributed except according to those terms.
@@ -29,7 +29,7 @@ use solana_rbpf::{
 use risc0_build::{get_package, guest_methods, setup_guest_build_env, GuestOptions};
 
 use risc0_zkvm::{
-    host::Prover,
+    host::{Prover, Receipt},
     serde::{
         from_slice,
         to_vec,
@@ -91,7 +91,7 @@ fn main() {
     };
 
     let bpf_dir = compile_bpf(
-        &Path::new(input_filename),
+        fs::read(input_filename).unwrap(),
         target_dir.clone(),
         needs_assembly,
     );
@@ -102,18 +102,13 @@ fn main() {
     if !matches.contains_id("no execute") {
         eprintln!("Executing program...");
 
-        let mut prover = Prover::new(&std::fs::read(method_path).unwrap(), method_id).unwrap();
-
-        let data = if let Some(filename) = matches.value_of("input data") {
-            fs::read(filename).unwrap()
+        let input_data = if let Some(filename) = matches.value_of("input data") {
+            Some(fs::read(filename).unwrap())
         } else {
-            vec![]
+            None
         };
-        prover.add_input(&to_vec(&data).unwrap()).unwrap();
 
-        let receipt = prover.run().unwrap();
-
-        let output: [u64; 10] = from_slice(&receipt.get_journal_vec().unwrap()).unwrap();
+        let (output, receipt) = execute_prover(method_path, method_id, input_data);
 
         println!("The final BPF register values were:");
         for i in 0..10 {
@@ -124,9 +119,20 @@ fn main() {
     }
 }
 
-fn compile_bpf<P: AsRef<Path>, Q: AsRef<Path>>(
-    input_path: P,
-    target_dir: Q,
+fn execute_prover<P: AsRef<Path>>(method_path: P, method_id: &[u8], input_data: Option<Vec<u8>>) -> ([u64; 10], Receipt) {
+        let mut prover = Prover::new(&std::fs::read(method_path).unwrap(), method_id).unwrap();
+
+        prover.add_input(&to_vec(&input_data.unwrap_or(vec![])).unwrap()).unwrap();
+
+        let receipt = prover.run().unwrap();
+        let output = from_slice(&receipt.get_journal_vec().unwrap()).unwrap();
+
+        (output, receipt)
+}
+
+fn compile_bpf<P: AsRef<Path>>(
+    input: Vec<u8>,
+    target_dir: P,
     needs_assembly: bool,
 ) -> PathBuf {
     let config = Config {
@@ -136,15 +142,13 @@ fn compile_bpf<P: AsRef<Path>, Q: AsRef<Path>>(
     };
     let syscall_registry = SyscallRegistry::default();
     let executable = if needs_assembly {
-        let source = fs::read(input_path).unwrap();
         assemble::<UserError, TestInstructionMeter>(
-            std::str::from_utf8(source.as_slice()).unwrap(),
+            std::str::from_utf8(input.as_slice()).unwrap(),
             config,
             syscall_registry,
         )
     } else {
-        let elf = fs::read(input_path).unwrap();
-        Executable::<UserError, TestInstructionMeter>::from_elf(&elf, config, syscall_registry)
+        Executable::<UserError, TestInstructionMeter>::from_elf(&input, config, syscall_registry)
             .map_err(|err| format!("Executable constructor failed: {:?}", err))
     }
     .unwrap();
